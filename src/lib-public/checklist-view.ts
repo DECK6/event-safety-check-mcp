@@ -101,9 +101,11 @@ export function checklistMarkdown(checklist: EventChecklist, format: "summary" |
     `- 완료율: ${progress.percent}% (${progress.done}/${progress.total})`,
   ];
 
+  const itemNumber = (item: ChecklistItem): number => checklist.items.findIndex((candidate) => candidate.id === item.id) + 1;
+
   if (format === "summary") {
     lines.push("", "## 미완료 항목", ...(pending.length > 0
-      ? pending.slice(0, 10).map((item) => `- [ ] ${item.title}${item.assignee ? ` — ${item.assignee}` : ""}`)
+      ? pending.slice(0, 10).map((item) => `${itemNumber(item)}. [ ] ${item.title}${item.assignee ? ` — ${item.assignee}` : ""}`)
       : ["- 모든 적용 항목을 완료했습니다."]));
     return lines.join("\n");
   }
@@ -115,7 +117,7 @@ export function checklistMarkdown(checklist: EventChecklist, format: "summary" |
       assignees.set(assignee, [...(assignees.get(assignee) ?? []), item]);
     }
     lines.push("", "## 미완료 항목", ...(pending.length > 0
-      ? pending.map((item) => `- [ ] ${item.title} · ${item.assignee ?? "미배정"}${item.dueBy ? ` · ${item.dueBy}` : ""}`)
+      ? pending.map((item) => `${itemNumber(item)}. [ ] ${item.title} · ${item.assignee ?? "미배정"}${item.dueBy ? ` · ${item.dueBy}` : ""}`)
       : ["- 모든 적용 항목을 완료했습니다."]), "", "## 담당자별 현황");
     for (const [assignee, items] of assignees) {
       const done = items.filter((item) => item.status === "done").length;
@@ -124,11 +126,14 @@ export function checklistMarkdown(checklist: EventChecklist, format: "summary" |
     return lines.join("\n");
   }
 
-  lines.push("", "## 전체 항목", ...checklist.items.map((item) => [
-    `- [${item.status === "done" ? "x" : " "}] ${item.title}`,
-    `  - 상태: ${statusLabel(item.status)} · 분류: ${item.category} · 근거 유형: ${item.basisType}`,
-    `  - 담당자: ${item.assignee ?? "미배정"} · 기한: ${item.dueBy ?? "미정"}`,
-    ...(item.note ? [`  - 메모: ${item.note}`] : []),
-  ].join("\n")));
+  lines.push("", "## 전체 항목", ...checklist.items.map((item, index) => {
+    const indent = " ".repeat(`${index + 1}. `.length);
+    return [
+      `${index + 1}. [${item.status === "done" ? "x" : " "}] ${item.title}`,
+      `${indent}- 상태: ${statusLabel(item.status)} · 분류: ${item.category} · 근거 유형: ${item.basisType}`,
+      `${indent}- 담당자: ${item.assignee ?? "미배정"} · 기한: ${item.dueBy ?? "미정"}`,
+      ...(item.note ? [`${indent}- 메모: ${item.note}`] : []),
+    ].join("\n");
+  }));
   return lines.join("\n");
 }

@@ -110,6 +110,7 @@ export function adaptEventInput(rawInput: unknown): AdaptedEventInput {
   const explicitKnownTypes = explicitValues.flatMap(typeMatches);
   const inferredTypes: MiceEventType[] = [];
 
+  if (explicitValues.length === 0 && input.eventName) inferredTypes.push(...typeMatches(input.eventName));
   if (input.outdoor === true || input.roadUse === true) inferredTypes.push("festival", "outdoor_event");
   if (input.performance === true) inferredTypes.push("performance");
   if (input.foodService === true || input.lpgUse === true) inferredTypes.push("food_event");

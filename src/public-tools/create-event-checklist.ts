@@ -28,7 +28,7 @@ async function handler(rawInput: unknown) {
 export const createEventChecklistTool: ToolDefinition = {
   name: "create_event_checklist",
   title: "행사 안전 체크리스트 만들기",
-  description: `Creates and stores an assignable event safety checklist using ${SERVICE_NAME}.`,
+  description: `Creates and stores a numbered draft event safety checklist using ${SERVICE_NAME}. Call this immediately when the user asks for a checklist, even if only the event name is known. Do not ask for date, crowd, or organizer first; omitted details stay unknown and can be refined later. Returns an eventKey for later updates.`,
   inputSchema: createEventSafetyPlanInputSchema,
   handler,
 };

@@ -93,6 +93,9 @@ describe("extended tool registration", () => {
       }
       expect(additions[0].annotations).toMatchObject({ readOnlyHint: false, idempotentHint: false });
       expect(additions[1].annotations).toMatchObject({ readOnlyHint: false, idempotentHint: false });
+      expect(additions[1].inputSchema.properties).toHaveProperty("itemNumber");
+      expect(additions[1].inputSchema.properties).toHaveProperty("itemTitle");
+      expect(additions[1].inputSchema.required).toEqual(["eventKey"]);
       expect(additions[2].annotations).toMatchObject({ readOnlyHint: true, idempotentHint: true });
       expect(additions[5].annotations).toMatchObject({ readOnlyHint: true, idempotentHint: false });
     });
@@ -122,15 +125,83 @@ describe("extended checklist workflow", () => {
     expect(fetched.content[0]?.text).toContain("담당자별 현황");
   });
 
+  test("creates a numbered draft from only a natural event name", async () => {
+    delete process.env.EVENT_STORE_PATH;
+    await clearChecklistStore();
+    const created = await createEventChecklistTool.handler({ eventName: "한강 플리마켓" });
+    const widget = created.structuredContent?.widget as any;
+    expect(Number(created.structuredContent?.itemCount)).toBeGreaterThan(0);
+    expect(widget.items.length).toBeGreaterThan(0);
+    expect(created.content[0]?.text).toContain("1. [ ]");
+    const stored = await getEventChecklist(String(created.structuredContent?.eventKey));
+    expect(stored?.profile.conditions).toEqual(expect.arrayContaining([
+      expect.objectContaining({ field: "eventTypes", inferred: true }),
+    ]));
+  });
+
+  test("updates the first item by a natural one-based item number", async () => {
+    delete process.env.EVENT_STORE_PATH;
+    await clearChecklistStore();
+    const created = await createEventChecklistTool.handler({ eventName: "한강 플리마켓" });
+    const eventKey = String(created.structuredContent?.eventKey);
+    const firstItem = (created.structuredContent?.widget as any).items[0];
+    const updated = await updateChecklistItemTool.handler({ eventKey, itemNumber: 1, status: "done", assignee: "김안전" });
+    expect(updated.structuredContent?.updated).toBe(true);
+    expect(updated.structuredContent?.item).toMatchObject({ id: firstItem.id, status: "done", assignee: "김안전" });
+    expect(updated.content[0]?.text).toContain("김안전");
+  });
+
+  test("updates an item by a natural title fragment", async () => {
+    delete process.env.EVENT_STORE_PATH;
+    await clearChecklistStore();
+    const created = await createEventChecklistTool.handler(extendedInput);
+    const eventKey = String(created.structuredContent?.eventKey);
+    const riskItem = (created.structuredContent?.widget as any).items.find((item: any) => item.category === "위험통제");
+    const fragment = riskItem.label.slice(0, -1);
+    expect(fragment).not.toBe(riskItem.label);
+    const updated = await updateChecklistItemTool.handler({ eventKey, itemTitle: fragment, status: "in_progress", assignee: "운영팀" });
+    expect(updated.structuredContent?.updated).toBe(true);
+    expect(updated.structuredContent?.item).toMatchObject({ id: riskItem.id, status: "in_progress", assignee: "운영팀" });
+  });
+
+  test("asks for a number when an exact title is duplicated", async () => {
+    delete process.env.EVENT_STORE_PATH;
+    await clearChecklistStore();
+    const created = await createEventChecklistTool.handler(extendedInput);
+    const eventKey = String(created.structuredContent?.eventKey);
+    const duplicatedTitle = "행사 안전관리계획서";
+    const matches = (created.structuredContent?.widget as any).items.filter((item: any) => item.label === duplicatedTitle);
+    expect(matches.length).toBeGreaterThan(1);
+    const result = await updateChecklistItemTool.handler({ eventKey, itemTitle: duplicatedTitle, status: "done" });
+    expect(result.structuredContent?.updated).toBe(false);
+    expect(result.content[0]?.text).toContain("이름이 같은 항목이 여러 개");
+  });
+
+  test("keeps item 10 metadata nested under its numbered item", async () => {
+    delete process.env.EVENT_STORE_PATH;
+    await clearChecklistStore();
+    const created = await createEventChecklistTool.handler(extendedInput);
+    const lines = String(created.content[0]?.text).split("\n");
+    const tenth = lines.findIndex((line) => line.startsWith("10. ["));
+    expect(tenth).toBeGreaterThan(0);
+    expect(lines[tenth + 1]).toStartWith("    - 상태:");
+    expect(lines[tenth + 2]).toStartWith("    - 담당자:");
+  });
+
   test("unknown event and item are guidance responses, not errors", async () => {
-    const missingEvent = await updateChecklistItemTool.handler({ eventKey: "missing", itemId: "missing", status: "done" });
+    const missingEvent = await updateChecklistItemTool.handler({ eventKey: "missing", itemNumber: 1, status: "done" });
     expect(missingEvent.isError).not.toBe(true);
     expect(missingEvent.content[0]?.text).toContain("찾지 못했습니다");
 
     const created = await createEventChecklistTool.handler(extendedInput);
-    const missingItem = await updateChecklistItemTool.handler({ eventKey: created.structuredContent?.eventKey, itemId: "missing", status: "done" });
+    const missingItem = await updateChecklistItemTool.handler({ eventKey: created.structuredContent?.eventKey, itemNumber: 999, status: "done" });
     expect(missingItem.isError).not.toBe(true);
     expect((missingItem.structuredContent?.items as unknown[]).length).toBeGreaterThan(0);
+    expect(missingItem.content[0]?.text).toContain("999번 항목");
+
+    const legacyMissingId = await updateChecklistItemTool.handler({ eventKey: created.structuredContent?.eventKey, itemId: "missing", status: "done" });
+    expect(legacyMissingId.isError).not.toBe(true);
+    expect(legacyMissingId.content[0]?.text).toContain("항목 ID 'missing'");
   });
 
   test("EVENT_STORE_PATH survives an in-process reload", async () => {
