@@ -3,16 +3,20 @@ import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/
 import { DATA_AS_OF } from "../config/constants.js";
 import { MAX_BODY_BYTES } from "../config/limits.js";
 import { SERVICE_ID, SERVICE_VERSION } from "../config/public-version.js";
-import { PUBLIC_TOOLS } from "../public-tools/registry.js";
+import { extendedToolsEnabled, registeredPublicTools } from "../public-tools/registry.js";
 import { createMcpServer } from "./mcp-server.js";
 
-const HEALTH_BODY = Object.freeze({
-  status: "ok",
-  service: SERVICE_ID,
-  version: SERVICE_VERSION,
-  tools: PUBLIC_TOOLS.length,
-  dataDate: DATA_AS_OF,
-});
+function healthBody(): Record<string, unknown> {
+  const extended = extendedToolsEnabled();
+  return {
+    status: "ok",
+    service: SERVICE_ID,
+    version: SERVICE_VERSION,
+    tools: registeredPublicTools().length,
+    dataDate: DATA_AS_OF,
+    ...(extended ? { extended: true } : {}),
+  };
+}
 
 function writeJson(response: ServerResponse, statusCode: number, body: unknown): void {
   if (response.headersSent) return;
@@ -81,7 +85,7 @@ export function createHttpServer(): Server {
     void (async () => {
       const url = new URL(request.url ?? "/", "http://localhost");
       if (url.pathname === "/health" && request.method === "GET") {
-        writeJson(response, 200, HEALTH_BODY);
+        writeJson(response, 200, healthBody());
         return;
       }
       if (url.pathname === "/mcp" && request.method === "POST") {

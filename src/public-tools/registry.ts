@@ -8,6 +8,12 @@ import { reviewEventSafetyPlanTool } from "./review-event-safety-plan.js";
 import { searchEventVenuesTool } from "./search-event-venues.js";
 import { getEventVenueRulesTool } from "./get-event-venue-rules.js";
 import { getEventRiskControlsTool } from "./get-event-risk-controls.js";
+import { createEventChecklistTool } from "./create-event-checklist.js";
+import { updateChecklistItemTool } from "./update-checklist-item.js";
+import { getEventChecklistTool } from "./get-event-checklist.js";
+import { exportEventDocumentsTool } from "./export-event-documents.js";
+import { addEventToCalendarTool } from "./add-event-to-calendar.js";
+import { getEventDayConditionsTool } from "./get-event-day-conditions.js";
 
 export const PUBLIC_TOOL_ANNOTATIONS = Object.freeze({
   readOnlyHint: true,
@@ -24,6 +30,39 @@ export const PUBLIC_TOOLS: readonly ToolDefinition[] = Object.freeze([
   getEventVenueRulesTool,
   getEventRiskControlsTool,
 ]);
+
+export const EXTENDED_TOOLS_SET: readonly ToolDefinition[] = Object.freeze([
+  createEventChecklistTool,
+  updateChecklistItemTool,
+  getEventChecklistTool,
+  exportEventDocumentsTool,
+  addEventToCalendarTool,
+  getEventDayConditionsTool,
+]);
+
+type ToolAnnotations = {
+  readOnlyHint: boolean;
+  destructiveHint: boolean;
+  idempotentHint: boolean;
+  openWorldHint: boolean;
+};
+
+const EXTENDED_TOOL_ANNOTATIONS: Readonly<Record<string, ToolAnnotations>> = Object.freeze({
+  create_event_checklist: Object.freeze({ readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false }),
+  update_checklist_item: Object.freeze({ readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false }),
+  get_event_checklist: Object.freeze({ readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false }),
+  export_event_documents: Object.freeze({ readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false }),
+  add_event_to_calendar: Object.freeze({ readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false }),
+  get_event_day_conditions: Object.freeze({ readOnlyHint: true, destructiveHint: false, idempotentHint: false, openWorldHint: true }),
+});
+
+export function extendedToolsEnabled(): boolean {
+  return process.env.EXTENDED_TOOLS === "1";
+}
+
+export function registeredPublicTools(): readonly ToolDefinition[] {
+  return extendedToolsEnabled() ? [...PUBLIC_TOOLS, ...EXTENDED_TOOLS_SET] : PUBLIC_TOOLS;
+}
 
 function extractRawShape(schema: unknown): z.ZodRawShape {
   if (schema && typeof schema === "object" && "shape" in schema) return (schema as { shape: z.ZodRawShape }).shape;
@@ -45,12 +84,13 @@ function safeErrorResult(error: unknown): McpToolResult {
 }
 
 export function registerPublicTools(server: McpServer): void {
-  for (const tool of PUBLIC_TOOLS) {
+  for (const tool of registeredPublicTools()) {
+    const annotations = EXTENDED_TOOL_ANNOTATIONS[tool.name] ?? PUBLIC_TOOL_ANNOTATIONS;
     server.registerTool(tool.name, {
       title: tool.title ?? tool.name,
       description: tool.description,
       inputSchema: extractRawShape(tool.inputSchema),
-      annotations: PUBLIC_TOOL_ANNOTATIONS,
+      annotations,
     }, async (input: unknown) => {
       try {
         return await tool.handler(input);
