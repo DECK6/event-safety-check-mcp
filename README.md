@@ -2,7 +2,7 @@
 
 학교 축제부터 플리마켓, 야외공연, 전시까지 장소와 인원, 현장 조건을 입력하면 먼저 준비할 안전조치와 문서, 주요 위험요인, 확인할 규정을 안내하는 MCP 서버입니다.
 
-서버는 요청 처리 중 외부 네트워크를 호출하거나 파일을 저장하지 않습니다. 법령·조례·행사장 규정·위험 통제 자료를 메모리에 올려 결정적으로 조회하며, Streamable HTTP를 stateless 방식으로 제공합니다.
+기본 모드는 요청 처리 중 외부 네트워크를 호출하거나 파일을 저장하지 않습니다. 법령·조례·행사장 규정·위험 통제 자료를 메모리에 올려 결정적으로 조회하며, Streamable HTTP를 stateless 방식으로 제공합니다.
 
 ## 실행
 
@@ -39,6 +39,36 @@ MCP endpoint는 `POST /mcp`, 상태 확인 endpoint는 `GET /health`입니다. `
 | `get_event_risk_controls` | 13개 위험 유형의 예방조치와 현장 확인사항 조회 |
 
 모든 도구는 읽기 전용이며 결과에 데이터 기준일과 면책 안내를 포함합니다. 행사 진단의 `attentionLevel`은 법적 적합성 점수가 아니라 추가 검토 필요도를 나타냅니다.
+
+## 확장 모드 (본선 기능)
+
+`EXTENDED_TOOLS=1`을 설정하면 기본 도구 6개에 다음 도구 6개가 추가되어 총 12개가 등록됩니다.
+
+| 도구 | 용도 |
+| --- | --- |
+| `create_event_checklist` | 진단 결과를 담당자·상태가 있는 체크리스트로 저장 |
+| `update_checklist_item` | 체크리스트 상태, 담당자, 기한, 메모 변경 |
+| `get_event_checklist` | 요약·전체·팀 공유 형식으로 체크리스트 조회 |
+| `export_event_documents` | 계획서·체크리스트·근거를 응답 내 Markdown 문서 묶음으로 반환 |
+| `add_event_to_calendar` | 결정적인 UID와 알림이 있는 RFC 5545 ICS 텍스트 생성 |
+| `get_event_day_conditions` | 설정된 외부 연계와 오프라인 기상악화 통제책 조회 |
+
+```bash
+EXTENDED_TOOLS=1 bun run start
+```
+
+| 환경변수 | 역할 | 미설정 시 동작 |
+| --- | --- | --- |
+| `EVENT_STORE_PATH` | 체크리스트 JSON 저장 경로 | 프로세스 메모리에만 저장하며 파일을 쓰지 않음 |
+| `KOPIS_SERVICE_KEY` | 공연·축제 카탈로그 연계 | 당일 조건 도구가 오프라인 안내 반환 |
+| `TOUR_API_SERVICE_KEY` | 관광공사 행사·축제 연계 | 당일 조건 도구가 오프라인 안내 반환 |
+| `NEMC_SERVICE_KEY` | 응급의료기관 연계 | 당일 조건 도구가 오프라인 안내 반환 |
+
+외부 키가 모두 없으면 `get_event_day_conditions`는 네트워크를 호출하지 않고 기상악화 대비 체크리스트를 반환합니다. `EVENT_STORE_PATH`를 설정했을 때만 체크리스트 저장소가 JSON 파일을 읽고 원자적으로 갱신합니다. 문서 내보내기와 캘린더 도구는 파일을 만들지 않고 응답 문자열만 반환합니다.
+
+> 예선 제출·기본 배포에서는 `EXTENDED_TOOLS`를 설정하지 마세요. 기본 서버는 기존과 동일하게 도구 6개만 노출하며 파일 쓰기와 네트워크 호출을 하지 않습니다.
+
+MCP Inspector GUI 화면 대신 재현 가능한 CLI 텍스트 세션을 [docs/examples/inspector-session.md](docs/examples/inspector-session.md)에 기록합니다. 대표 질의 10개의 실제 응답은 [docs/examples/representative-queries.md](docs/examples/representative-queries.md)에 있습니다.
 
 ## Docker
 
