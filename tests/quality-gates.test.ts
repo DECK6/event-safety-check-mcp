@@ -53,8 +53,11 @@ describe("quality gates", () => {
     for (const forbidden of ["적법", "허가 가능", "법적으로 완전함"]) expect(text).not.toContain(forbidden);
   });
 
-  test("review rejects plans over 50,000 characters", () => {
-    expect(() => reviewEventSafetyPlanInputSchema.parse({ planMarkdown: "가".repeat(50_001) })).toThrow();
+  test("review rejects plans over 50,000 characters with a friendly Korean message", async () => {
+    const result = await reviewEventSafetyPlanTool.handler({ planMarkdown: "가".repeat(50_001) });
+    expect(result.isError).toBe(true);
+    expect(String(result.content[0]?.text)).toContain("50,000");
+    expect(String(result.content[0]?.text)).not.toContain("String must contain");
   });
 
   test("venue search defaults to five and caps input at ten", async () => {

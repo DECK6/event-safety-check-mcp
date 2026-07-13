@@ -16,8 +16,9 @@ type InternalFinding = {
   evidence?: { line: number; excerpt: string };
 };
 
+// max()는 SDK 사전 검증이 영어 zod 덤프를 그대로 반환하므로 핸들러에서 한국어 안내로 처리한다.
 export const reviewEventSafetyPlanInputSchema = publicEventInputSchema.extend({
-  planMarkdown: z.string().min(1).max(MAX_PLAN_MARKDOWN_CHARS).describe("검수할 행사 안전관리계획 Markdown(최대 50,000자)"),
+  planMarkdown: z.string().min(1).describe("검수할 행사 안전관리계획 Markdown(최대 50,000자)"),
 });
 
 function statusFor(finding: InternalFinding): ReviewStatus {
@@ -39,6 +40,14 @@ function mapFinding(finding: InternalFinding): PublicReviewFinding {
 
 async function handler(rawInput: unknown) {
   const parsed = reviewEventSafetyPlanInputSchema.parse(rawInput ?? {});
+  if (parsed.planMarkdown.length > MAX_PLAN_MARKDOWN_CHARS) {
+    const message = `계획서가 너무 깁니다. 최대 ${MAX_PLAN_MARKDOWN_CHARS.toLocaleString("ko-KR")}자까지 검수할 수 있습니다. 핵심 본문만 나눠서 다시 요청해 주세요.`;
+    return {
+      isError: true,
+      content: [{ type: "text" as const, text: message }],
+      structuredContent: { error: message, inputLength: parsed.planMarkdown.length, maxLength: MAX_PLAN_MARKDOWN_CHARS },
+    };
+  }
   const adapted = adaptEventInput(parsed);
   const internal = await reviewMiceSafetyPlanTool.handler({ ...adapted.internalInput, planMarkdown: parsed.planMarkdown });
   const rawFindings = Array.isArray(internal.structuredContent?.findings)
