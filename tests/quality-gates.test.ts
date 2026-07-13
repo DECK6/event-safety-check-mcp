@@ -6,6 +6,7 @@ import { searchEventVenuesTool } from "../src/public-tools/search-event-venues.j
 import { getEventVenueRulesTool } from "../src/public-tools/get-event-venue-rules.js";
 import { getEventRiskControlsTool } from "../src/public-tools/get-event-risk-controls.js";
 import { DATA_AS_OF } from "../src/config/constants.js";
+import { MAX_SOURCES } from "../src/config/limits.js";
 
 const representativeInput = {
   eventName: "학교 축제",
@@ -31,6 +32,14 @@ describe("quality gates", () => {
     for (const forbidden of ["MICE", "온톨로지", "적용성 엔진", "컴플라이언스"]) {
       expect(text).not.toContain(forbidden);
     }
+  });
+
+  test("assess markdown numbers evidence and caps structured sources", async () => {
+    const result = await assessEventSafetyTool.handler(representativeInput);
+    const text = result.content[0]?.text ?? "";
+    expect(text).toContain("[S1]");
+    expect(text).toContain("## 근거 자료");
+    expect((result.structuredContent?.sources as unknown[]).length).toBeLessThanOrEqual(MAX_SOURCES);
   });
 
   test("review uses only qualified verdict language", async () => {
