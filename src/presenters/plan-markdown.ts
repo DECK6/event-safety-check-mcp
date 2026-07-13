@@ -1,6 +1,7 @@
 import type { EventSafetyResult } from "../adapters/event-result-adapter.js";
 import type { AdaptedEventInput } from "../adapters/event-input-adapter.js";
 import { DATA_AS_OF } from "../config/constants.js";
+import { MAX_ITEM_TEXT_CHARS, MAX_PLAN_BULLETS_PER_SECTION } from "../config/limits.js";
 import { sanitizePublicTerms } from "./terms.js";
 
 type DocumentBundle = Record<string, unknown>;
@@ -17,6 +18,18 @@ function profileLines(adapted: AdaptedEventInput): string[] {
     const value = Array.isArray(condition.value) ? condition.value.join(", ") : typeof condition.value === "boolean" ? (condition.value ? "예" : "아니요") : String(condition.value);
     return `- ${condition.inferred ? "추론" : "입력"} · ${condition.label}: ${value}`;
   });
+}
+
+function limitSection(body: string): string {
+  let bullets = 0;
+  return body.split("\n").filter((line) => {
+    if (!line.trimStart().startsWith("- ")) return true;
+    bullets += 1;
+    return bullets <= MAX_PLAN_BULLETS_PER_SECTION;
+  }).map((line) => {
+    if (!line.trimStart().startsWith("- ") || line.length <= MAX_ITEM_TEXT_CHARS) return line;
+    return `${line.slice(0, MAX_ITEM_TEXT_CHARS - 1).trimEnd()}…`;
+  }).join("\n");
 }
 
 export function presentSafetyPlan(options: {
@@ -50,7 +63,7 @@ export function presentSafetyPlan(options: {
     "",
     "> 이 초안은 입력 조건을 바탕으로 만든 준비 문서입니다. 담당자·도면·현장 실측값을 채우고 관할기관과 행사장에 최신 기준을 확인하세요.",
     "",
-    ...sections.flatMap(([title, body]) => [`## ${title}`, body, ""]),
+    ...sections.flatMap(([title, body]) => [`## ${title}`, limitSection(body), ""]),
     "## 주의사항",
     `- 데이터 기준일: ${DATA_AS_OF}`,
     "- 이 초안은 법률 자문이나 허가 판단을 대신하지 않습니다.",

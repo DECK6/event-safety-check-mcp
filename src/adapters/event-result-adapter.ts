@@ -1,5 +1,12 @@
 import { DATA_AS_OF } from "../config/constants.js";
-import { MAX_RISK_CONTROLS, MAX_TOP_ACTIONS } from "../config/limits.js";
+import {
+  MAX_APPLICABLE,
+  MAX_ITEM_TEXT_CHARS,
+  MAX_NOT_APPLICABLE,
+  MAX_RISK_CONTROLS,
+  MAX_SOURCES,
+  MAX_TOP_ACTIONS,
+} from "../config/limits.js";
 import { PUBLIC_RESPONSE_META } from "../config/public-version.js";
 import { MICE_DATA, type DutyEntry, type HazardEntry, type LawEntry, type LocalOrdinanceRecord, type SourceEntry } from "../lib/mice-data.js";
 import type { Strictness } from "../lib/types.js";
@@ -8,7 +15,7 @@ import type { AdaptedEventInput } from "./event-input-adapter.js";
 type AnyRecord = Record<string, unknown>;
 
 export type AttentionLevel = "basic" | "enhanced" | "high_review";
-export type BasisType = "법정 의무 후보" | "조례" | "베뉴 규정" | "권장";
+export type BasisType = "법정 의무 후보" | "지자체 조례" | "행사장 규정" | "권장";
 export type DocumentCategory = "법정 의무 후보" | "베뉴 제출 문서" | "권장 체크리스트" | "관할기관 확인 필요";
 
 export interface PublicSource {
@@ -22,9 +29,9 @@ export interface PublicSource {
 export interface EventSafetyResult {
   eventProfile: AdaptedEventInput["eventProfile"];
   attentionLevel: AttentionLevel;
-  topActions: Array<{ action: string; reason: string; deadline: string; basisType: BasisType; agency: string }>;
-  requiredDocuments: Array<{ name: string; category: DocumentCategory; basis: string }>;
-  riskControls: Array<{ risk: string; why: string; controls: string[] }>;
+  topActions: Array<{ action: string; reason: string; deadline: string; basisType: BasisType; agency: string; sourceRefs: string[] }>;
+  requiredDocuments: Array<{ name: string; category: DocumentCategory; basis: string; sourceRefs: string[] }>;
+  riskControls: Array<{ risk: string; why: string; controls: string[]; sourceRefs: string[] }>;
   applicableCandidates: Array<{ id: string; title: string; basisType: BasisType; reason: string; verificationStatus: string }>;
   notApplicable: Array<{ id: string; title: string; reason: string }>;
   missingInputs: string[];
@@ -36,6 +43,20 @@ function arrayOf<T>(value: unknown): T[] {
   return Array.isArray(value) ? value as T[] : [];
 }
 
+function concise(text: string): string {
+  if (text.length <= MAX_ITEM_TEXT_CHARS) return text;
+  return `${text.slice(0, MAX_ITEM_TEXT_CHARS - 1).trimEnd()}…`;
+}
+
+function uniqueSources(sources: SourceEntry[]): SourceEntry[] {
+  const seen = new Set<string>();
+  return sources.filter((source) => {
+    if (seen.has(source.id)) return false;
+    seen.add(source.id);
+    return true;
+  }).slice(0, MAX_SOURCES);
+}
+
 export function calculateAttentionLevel(input: AdaptedEventInput["internalInput"]): AttentionLevel {
   if ((input.expectedCrowd ?? 0) >= 3000 || input.unhostedCrowd || input.roadUse) return "high_review";
   if ((input.expectedCrowd ?? 0) >= 1000
@@ -45,8 +66,8 @@ export function calculateAttentionLevel(input: AdaptedEventInput["internalInput"
 
 function basisTypeForStrictness(strictness: Strictness): BasisType {
   if (strictness === "statutory_required") return "법정 의무 후보";
-  if (strictness === "local_required") return "조례";
-  if (strictness === "venue_required") return "베뉴 규정";
+  if (strictness === "local_required") return "지자체 조례";
+  if (strictness === "venue_required") return "행사장 규정";
   return "권장";
 }
 
@@ -148,17 +169,19 @@ export function adaptApplicabilityResult(adapted: AdaptedEventInput, structuredC
   const sources = arrayOf<SourceEntry>(structuredContent.sources);
 
   const topActions = duties.slice(0, MAX_TOP_ACTIONS).map((duty) => ({
-    action: duty.title,
-    reason: duty.requiredWhen,
-    deadline: deadlineForDuty(duty),
+    action: concise(duty.title),
+    reason: concise(duty.requiredWhen),
+    deadline: concise(deadlineForDuty(duty)),
     basisType: basisTypeForStrictness(duty.strictness),
-    agency: agencyForDuty(duty),
+    agency: concise(agencyForDuty(duty)),
+    sourceRefs: [...duty.sourceRefs],
   }));
 
   const requiredDocuments = duties.map((duty) => ({
-    name: duty.title,
+    name: concise(duty.title),
     category: categoryForDuty(duty),
-    basis: duty.requiredWhen,
+    basis: concise(duty.requiredWhen),
+    sourceRefs: [...duty.sourceRefs],
   }));
 
   const riskControls = hazards
@@ -167,8 +190,9 @@ export function adaptApplicabilityResult(adapted: AdaptedEventInput, structuredC
     .slice(0, MAX_RISK_CONTROLS)
     .map(({ hazard }) => ({
     risk: hazard.id,
-    why: `${hazard.label} 위험(${hazard.riskLevel})이 입력 조건과 연결됩니다.`,
-    controls: hazard.controls.slice(0, 3),
+    why: concise(`${hazard.label} 위험(${hazard.riskLevel})이 입력 조건과 연결됩니다.`),
+    controls: hazard.controls.slice(0, 3).map(concise),
+    sourceRefs: [...hazard.sourceRefs],
   }));
 
   const applicableCandidates: EventSafetyResult["applicableCandidates"] = [
@@ -176,14 +200,14 @@ export function adaptApplicabilityResult(adapted: AdaptedEventInput, structuredC
       id: law.id,
       title: law.name,
       basisType: "법정 의무 후보" as const,
-      reason: law.miceUse,
+      reason: concise(law.miceUse),
       verificationStatus: law.verificationStatus,
     })),
     ...ordinances.map((ordinance) => ({
       id: ordinance.id,
       title: ordinance.name,
-      basisType: "조례" as const,
-      reason: ordinance.appliesWhen,
+      basisType: "지자체 조례" as const,
+      reason: concise(ordinance.appliesWhen),
       verificationStatus: ordinance.verificationStatus,
     })),
   ];
@@ -194,10 +218,10 @@ export function adaptApplicabilityResult(adapted: AdaptedEventInput, structuredC
     topActions,
     requiredDocuments,
     riskControls,
-    applicableCandidates,
-    notApplicable: explicitNotApplicable(adapted.internalInput),
+    applicableCandidates: applicableCandidates.slice(0, MAX_APPLICABLE),
+    notApplicable: explicitNotApplicable(adapted.internalInput).slice(0, MAX_NOT_APPLICABLE),
     missingInputs: adapted.missingInputs,
-    sources: sources.map(mapSource),
+    sources: uniqueSources(sources).map(mapSource),
     meta: PUBLIC_RESPONSE_META,
   };
 }
