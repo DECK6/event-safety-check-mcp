@@ -123,7 +123,8 @@ export function adaptEventInput(rawInput: unknown): AdaptedEventInput {
   const conditions: EventProfileCondition[] = [];
   for (const [field, value] of Object.entries(input)) {
     if (field === "eventType" || value === undefined) continue;
-    conditions.push({ field, label: labelFor(field), value, inferred: false });
+    const displayValue = field === "outdoor" ? (value === true ? "실외" : "실내") : value;
+    conditions.push({ field, label: labelFor(field), value: displayValue, inferred: false });
   }
   if (explicitValues.length > 0) {
     conditions.push({ field: "eventTypes", label: labelFor("eventTypes"), value: explicitValues, inferred: false });
@@ -158,8 +159,13 @@ export function adaptEventInput(rawInput: unknown): AdaptedEventInput {
 
   const missingInputs: string[] = [];
   if (input.expectedCrowd === undefined) missingInputs.push("예상 최대 인원은 몇 명인가요?");
-  if (input.outdoor === undefined || (!input.location && !input.venueId)) {
+  const locationMissing = !input.location && !input.venueId;
+  if (input.outdoor === undefined && locationMissing) {
     missingInputs.push("실내·실외 여부와 행사 장소(또는 관할 지역)를 알려주세요.");
+  } else if (input.outdoor === undefined) {
+    missingInputs.push("실내 행사인가요, 야외 행사인가요?");
+  } else if (locationMissing) {
+    missingInputs.push("행사 장소(또는 관할 지역)를 알려주세요.");
   }
   if ([input.temporaryStructures, input.temporaryElectricity, input.lpgUse, input.foodService].every((value) => value === undefined)) {
     missingInputs.push("임시무대·천막, 임시전기, 가스, 식음료 사용 여부를 알려주세요.");
