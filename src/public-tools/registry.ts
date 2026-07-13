@@ -57,7 +57,8 @@ const EXTENDED_TOOL_ANNOTATIONS: Readonly<Record<string, ToolAnnotations>> = Obj
 });
 
 export function extendedToolsEnabled(): boolean {
-  return process.env.EXTENDED_TOOLS === "1";
+  // 확장 도구는 기본 노출. EXTENDED_TOOLS=0으로만 핵심 6개로 제한할 수 있다.
+  return process.env.EXTENDED_TOOLS !== "0";
 }
 
 export function registeredPublicTools(): readonly ToolDefinition[] {

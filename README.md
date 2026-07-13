@@ -40,9 +40,9 @@ MCP endpoint는 `POST /mcp`, 상태 확인 endpoint는 `GET /health`입니다. `
 
 모든 도구는 읽기 전용이며 결과에 데이터 기준일과 면책 안내를 포함합니다. 행사 진단의 `attentionLevel`은 법적 적합성 점수가 아니라 추가 검토 필요도를 나타냅니다.
 
-## 확장 모드 (본선 기능)
+## 확장 도구
 
-`EXTENDED_TOOLS=1`을 설정하면 기본 도구 6개에 다음 도구 6개가 추가되어 총 12개가 등록됩니다.
+핵심 도구 6개에 더해 다음 도구 6개가 기본으로 함께 등록되어 총 12개가 노출됩니다.
 
 | 도구 | 용도 |
 | --- | --- |
@@ -54,7 +54,8 @@ MCP endpoint는 `POST /mcp`, 상태 확인 endpoint는 `GET /health`입니다. `
 | `get_event_day_conditions` | 설정된 외부 연계와 오프라인 기상악화 통제책 조회 |
 
 ```bash
-EXTENDED_TOOLS=1 bun run start
+bun run start                  # 12개 도구 (기본)
+EXTENDED_TOOLS=0 bun run start # 핵심 6개 도구로 제한
 ```
 
 | 환경변수 | 역할 | 미설정 시 동작 |
@@ -66,7 +67,7 @@ EXTENDED_TOOLS=1 bun run start
 
 외부 키가 모두 없으면 `get_event_day_conditions`는 네트워크를 호출하지 않고 기상악화 대비 체크리스트를 반환합니다. `EVENT_STORE_PATH`를 설정했을 때만 체크리스트 저장소가 JSON 파일을 읽고 원자적으로 갱신합니다. 문서 내보내기와 캘린더 도구는 파일을 만들지 않고 응답 문자열만 반환합니다.
 
-> 예선 제출·기본 배포에서는 `EXTENDED_TOOLS`를 설정하지 마세요. 기본 서버는 기존과 동일하게 도구 6개만 노출하며 파일 쓰기와 네트워크 호출을 하지 않습니다.
+> 확장 도구를 포함해도 기본 설정에서는 파일 쓰기와 외부 네트워크 호출이 없습니다. 체크리스트는 프로세스 메모리에 저장되며, `EVENT_STORE_PATH`·외부 API 키를 설정했을 때만 각각 파일 저장·실시간 연계가 활성화됩니다. 핵심 6개만 노출해야 하는 환경에서는 `EXTENDED_TOOLS=0`을 설정하세요.
 
 MCP Inspector GUI 화면 대신 재현 가능한 CLI 텍스트 세션을 [docs/examples/inspector-session.md](docs/examples/inspector-session.md)에 기록합니다. 대표 질의 10개의 실제 응답은 [docs/examples/representative-queries.md](docs/examples/representative-queries.md)에 있습니다.
 

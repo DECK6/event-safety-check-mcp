@@ -38,12 +38,13 @@ describe("stateless HTTP MCP server", () => {
       status: "ok",
       service: "event-safety-check-mcp",
       version: "0.1.0",
-      tools: 6,
+      tools: 12,
       dataDate: "2026-05-31",
+      extended: true,
     });
   });
 
-  test("initialize and tools/list expose exactly six annotated tools", async () => {
+  test("initialize and tools/list expose twelve annotated tools by default", async () => {
     const initialized = await mcpRequest({
       jsonrpc: "2.0",
       id: 1,
@@ -55,7 +56,7 @@ describe("stateless HTTP MCP server", () => {
 
     const listed = await mcpRequest({ jsonrpc: "2.0", id: 2, method: "tools/list", params: {} });
     expect(listed.status).toBe(200);
-    expect(listed.data.result.tools).toHaveLength(6);
+    expect(listed.data.result.tools).toHaveLength(12);
     expect(listed.data.result.tools.map((tool: any) => tool.name)).toEqual([
       "assess_event_safety",
       "create_event_safety_plan",
@@ -63,8 +64,14 @@ describe("stateless HTTP MCP server", () => {
       "search_event_venues",
       "get_event_venue_rules",
       "get_event_risk_controls",
+      "create_event_checklist",
+      "update_checklist_item",
+      "get_event_checklist",
+      "export_event_documents",
+      "add_event_to_calendar",
+      "get_event_day_conditions",
     ]);
-    for (const tool of listed.data.result.tools) {
+    for (const tool of listed.data.result.tools.slice(0, 6)) {
       expect(tool.annotations).toMatchObject({
         readOnlyHint: true,
         destructiveHint: false,

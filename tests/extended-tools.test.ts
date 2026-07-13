@@ -63,16 +63,16 @@ afterEach(async () => {
 });
 
 describe("extended tool registration", () => {
-  test("flag off lists six tools", async () => {
-    delete process.env.EXTENDED_TOOLS;
+  test("EXTENDED_TOOLS=0 restricts to the six core tools", async () => {
+    process.env.EXTENDED_TOOLS = "0";
     await withServer(async (baseUrl) => {
       const listed = await mcpRequest(baseUrl, { jsonrpc: "2.0", id: 1, method: "tools/list", params: {} });
       expect(listed.result.tools).toHaveLength(6);
     });
   });
 
-  test("flag on lists twelve tools with per-tool annotations", async () => {
-    process.env.EXTENDED_TOOLS = "1";
+  test("default lists twelve tools with per-tool annotations", async () => {
+    delete process.env.EXTENDED_TOOLS;
     await withServer(async (baseUrl) => {
       const health = await (await fetch(`${baseUrl}/health`)).json() as any;
       expect(health).toMatchObject({ tools: 12, extended: true });
